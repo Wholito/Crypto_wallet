@@ -56,15 +56,22 @@ class WalletTransaction extends Equatable {
 }
 
 class FeeEstimate extends Equatable {
-  const FeeEstimate({required this.gasLimit, required this.gasPrice});
+  const FeeEstimate({
+    required this.gasLimit,
+    required this.maxFeePerGas,
+    required this.maxPriorityFeePerGas,
+  });
 
   final BigInt gasLimit;
-  final BigInt gasPrice;
+  final BigInt maxFeePerGas;
+  final BigInt maxPriorityFeePerGas;
 
-  BigInt get fee => gasLimit * gasPrice;
+  BigInt get fee => gasLimit * maxFeePerGas;
+
+  BigInt get gasPrice => maxFeePerGas;
 
   @override
-  List<Object?> get props => [gasLimit, gasPrice];
+  List<Object?> get props => [gasLimit, maxFeePerGas, maxPriorityFeePerGas];
 }
 
 class SendRequest extends Equatable {
@@ -72,12 +79,33 @@ class SendRequest extends Equatable {
     required this.to,
     required this.amount,
     required this.estimate,
+    required this.asset,
+    required this.decimals,
+    this.tokenContract,
+    this.warning,
   });
 
   final String to;
   final BigInt amount;
   final FeeEstimate estimate;
+  final String asset;
+  final int decimals;
+  final String? tokenContract;
+  final String? warning;
+
+  bool get isToken => tokenContract != null;
+
+  SendRequest copyWith({FeeEstimate? estimate, String? warning}) => SendRequest(
+        to: to,
+        amount: amount,
+        estimate: estimate ?? this.estimate,
+        asset: asset,
+        decimals: decimals,
+        tokenContract: tokenContract,
+        warning: warning ?? this.warning,
+      );
 
   @override
-  List<Object?> get props => [to, amount, estimate];
+  List<Object?> get props =>
+      [to, amount, estimate, asset, decimals, tokenContract, warning];
 }

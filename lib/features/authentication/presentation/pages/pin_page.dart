@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../shared/widgets/app_logo.dart';
 import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/fade_slide_in.dart';
 import '../../../../shared/widgets/pin_pad.dart';
 import '../../../onboarding/presentation/providers/onboarding_provider.dart';
 import '../providers/auth_provider.dart';
@@ -32,11 +34,23 @@ class _PinPageState extends ConsumerState<PinPage> {
   }
 
   Future<void> _biometric() async {
-    await ref.read(sessionProvider.notifier).unlockWithBiometrics();
+    try {
+      final ok =
+          await ref.read(sessionProvider.notifier).unlockWithBiometrics();
+      if (!ok && mounted) {
+        setState(() => _error = 'Biometric unlock failed. Enter your PIN.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = errorMessage(e));
+    }
   }
 
   Future<void> _unlock(String pin) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    await Future<void>.delayed(Duration.zero);
     try {
       await ref.read(sessionProvider.notifier).unlockWithPin(pin);
     } catch (e) {
@@ -90,32 +104,32 @@ class _PinPageState extends ConsumerState<PinPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Theme.of(context).colorScheme.primaryContainer,
+                const FadeSlideIn(child: AppLogo(size: 84, showGlow: true)),
+                const SizedBox(height: 20),
+                if (_busy) ...[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Unlocking…',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  child: Icon(
-                    Icons.lock_outline,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  const SizedBox(height: 16),
+                ],
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 80),
+                  child: PinPad(
+                    title: 'Enter PIN',
+                    error: _error,
+                    enabled: !_busy,
+                    onCompleted: _unlock,
+                    bottomLeft: _biometricEnabled
+                        ? IconButton(
+                            key: const Key('biometric_button'),
+                            onPressed: _biometric,
+                            icon: const Icon(Icons.fingerprint_rounded),
+                          )
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 16),
-                PinPad(
-                  title: 'Enter PIN',
-                  error: _error,
-                  enabled: !_busy,
-                  onCompleted: _unlock,
-                  bottomLeft: _biometricEnabled
-                      ? IconButton(
-                          key: const Key('biometric_button'),
-                          onPressed: _biometric,
-                          icon: const Icon(Icons.fingerprint),
-                        )
-                      : null,
                 ),
                 const SizedBox(height: 24),
                 TextButton(

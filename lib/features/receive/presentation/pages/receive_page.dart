@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../../shared/widgets/copy_button.dart';
 import '../../../../shared/widgets/error_view.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../providers/receive_provider.dart';
@@ -68,14 +68,7 @@ class ReceivePage extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: value));
-                  if (context.mounted) showMessage(context, 'Address copied');
-                },
-                icon: const Icon(Icons.copy_rounded),
-                label: const Text('Copy address'),
-              ),
+              CopyFilledButton(value: value),
               const SizedBox(height: 16),
               Text(
                 'Send only $symbols on ${network.name} to this address.',

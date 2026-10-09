@@ -17,6 +17,17 @@ class BlockchainDataSource {
   final http.Client _http;
   final Web3Client _client;
 
+  static const _erc20Abi =
+      '['
+      '{"constant":true,"inputs":[{"name":"owner","type":"address"}],'
+      '"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],'
+      '"stateMutability":"view","type":"function"},'
+      '{"constant":false,"inputs":[{"name":"to","type":"address"},'
+      '{"name":"value","type":"uint256"}],"name":"transfer",'
+      '"outputs":[{"name":"","type":"bool"}],'
+      '"stateMutability":"nonpayable","type":"function"}'
+      ']';
+
   Future<T> _guarded<T>(Future<T> Function() action) async {
     try {
       return await action().timeout(AppConstants.rpcTimeout);
@@ -25,23 +36,28 @@ class BlockchainDataSource {
     }
   }
 
+  DeployedContract _erc20(String contract) => DeployedContract(
+        ContractAbi.fromJson(_erc20Abi, 'ERC20'),
+        EthereumAddress.fromHex(contract),
+      );
+
+  Uint8List encodeErc20Transfer(String contract, String to, BigInt amount) {
+    final deployed = _erc20(contract);
+    return deployed.function('transfer').encodeCall([
+      EthereumAddress.fromHex(to),
+      amount,
+    ]);
+  }
+
   Future<BigInt> getBalance(String address) => _guarded(() async {
         final amount =
             await _client.getBalance(EthereumAddress.fromHex(address));
         return amount.getInWei;
       });
 
-  static const _erc20Abi =
-      '[{"constant":true,"inputs":[{"name":"owner","type":"address"}],'
-      '"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],'
-      '"stateMutability":"view","type":"function"}]';
-
   Future<BigInt> getTokenBalance(String address, String contract) =>
       _guarded(() async {
-        final deployed = DeployedContract(
-          ContractAbi.fromJson(_erc20Abi, 'ERC20'),
-          EthereumAddress.fromHex(contract),
-        );
+        final deployed = _erc20(contract);
         final result = await _client.call(
           contract: deployed,
           function: deployed.function('balanceOf'),
@@ -50,27 +66,56 @@ class BlockchainDataSource {
         return result.first as BigInt;
       });
 
-  Future<({BigInt gasLimit, BigInt gasPrice})> estimateFee({
+  Future<bool> isContract(String address) => _guarded(() async {
+        final code = await _client.getCode(EthereumAddress.fromHex(address));
+        return code.isNotEmpty;
+      });
+
+  Future<FeeEstimate> estimateFee({
     required String from,
     required String to,
     required BigInt amount,
+    String? tokenContract,
   }) async {
     try {
-      final result = await () async {
+      return await () async {
+        final data = tokenContract == null
+            ? null
+            : encodeErc20Transfer(tokenContract, to, amount);
+        final target = tokenContract ?? to;
+        final value =
+            tokenContract == null ? EtherAmount.inWei(amount) : EtherAmount.zero();
         final gasLimit = await _client.estimateGas(
           sender: EthereumAddress.fromHex(from),
-          to: EthereumAddress.fromHex(to),
-          value: EtherAmount.inWei(amount),
+          to: EthereumAddress.fromHex(target),
+          value: value,
+          data: data,
         );
+        final padded = gasLimit *
+            BigInt.from(100 + AppConstants.gasLimitMarginPercent) ~/
+            BigInt.from(100);
+        final block = await _client.getBlockInformation();
+        final base = block.baseFeePerGas?.getInWei;
+        if (base != null) {
+          final tip = BigInt.from(1500000000);
+          final maxFee = (base * BigInt.from(2)) + tip;
+          final margin = BigInt.from(100 + AppConstants.gasPriceMarginPercent);
+          return FeeEstimate(
+            gasLimit: padded,
+            maxFeePerGas: maxFee * margin ~/ BigInt.from(100),
+            maxPriorityFeePerGas: tip,
+          );
+        }
         final price = (await _client.getGasPrice()).getInWei;
         final margin = BigInt.from(100 + AppConstants.gasPriceMarginPercent);
-        return (
-          gasLimit: gasLimit,
-          gasPrice: price * margin ~/ BigInt.from(100),
+        final paddedPrice = price * margin ~/ BigInt.from(100);
+        return FeeEstimate(
+          gasLimit: padded,
+          maxFeePerGas: paddedPrice,
+          maxPriorityFeePerGas: paddedPrice,
         );
       }()
           .timeout(AppConstants.rpcTimeout);
-      return result;
     } catch (e) {
       final failure = Failure.from(e);
       if (e is RPCError && failure is! InsufficientBalanceFailure) {
@@ -84,8 +129,8 @@ class BlockchainDataSource {
     required EthPrivateKey credentials,
     required String to,
     required BigInt amount,
-    required BigInt gasLimit,
-    required BigInt gasPrice,
+    required FeeEstimate estimate,
+    String? tokenContract,
   }) async {
     try {
       return await () async {
@@ -93,11 +138,20 @@ class BlockchainDataSource {
           credentials.address,
           atBlock: const BlockNum.pending(),
         );
+        final data = tokenContract == null
+            ? null
+            : encodeErc20Transfer(tokenContract, to, amount);
+        final target = tokenContract ?? to;
+        final value =
+            tokenContract == null ? EtherAmount.inWei(amount) : EtherAmount.zero();
         final tx = Transaction(
-          to: EthereumAddress.fromHex(to),
-          value: EtherAmount.inWei(amount),
-          gasPrice: EtherAmount.inWei(gasPrice),
-          maxGas: gasLimit.toInt(),
+          to: EthereumAddress.fromHex(target),
+          value: value,
+          data: data,
+          maxGas: estimate.gasLimit.toInt(),
+          maxFeePerGas: EtherAmount.inWei(estimate.maxFeePerGas),
+          maxPriorityFeePerGas:
+              EtherAmount.inWei(estimate.maxPriorityFeePerGas),
           nonce: nonce,
         );
         final Uint8List signed = await _client.signTransaction(

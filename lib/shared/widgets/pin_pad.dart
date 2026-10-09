@@ -52,10 +52,12 @@ class _PinPadState extends State<PinPad> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(AppConstants.pinLength, (i) {
             final filled = i < _pin.length;
-            return Container(
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
               margin: const EdgeInsets.symmetric(horizontal: 8),
-              width: 16,
-              height: 16,
+              width: filled ? 18 : 14,
+              height: filled ? 18 : 14,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: filled ? theme.colorScheme.primary : Colors.transparent,

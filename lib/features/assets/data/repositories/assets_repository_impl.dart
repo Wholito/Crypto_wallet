@@ -94,9 +94,13 @@ class AssetsRepositoryImpl implements AssetsRepository {
     return _native(balance);
   }
 
+  @override
+  Future<BigInt> getTokenBalance(String address, String contract) =>
+      _blockchain.getTokenBalance(address, contract);
+
   Future<BigInt> _tokenBalance(TokenInfo token, String address) async {
     try {
-      return await _blockchain.getTokenBalance(address, token.contractAddress);
+      return await getTokenBalance(address, token.contractAddress);
     } catch (_) {
       return BigInt.zero;
     }

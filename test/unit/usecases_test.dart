@@ -3,6 +3,7 @@ import 'package:crypto_wallet/features/assets/domain/usecases/assets_usecases.da
 import 'package:crypto_wallet/features/authentication/domain/usecases/auth_usecases.dart';
 import 'package:crypto_wallet/features/send/domain/usecases/prepare_send.dart';
 import 'package:crypto_wallet/features/transactions/domain/entities/wallet_transaction.dart';
+import 'package:crypto_wallet/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:crypto_wallet/features/transactions/domain/usecases/transaction_usecases.dart';
 import 'package:crypto_wallet/features/wallet/domain/usecases/restore_wallet.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,16 +13,23 @@ import '../helpers/fakes.dart';
 
 class MockGetBalance extends Mock implements GetBalance {}
 
+class MockGetTokenBalance extends Mock implements GetTokenBalance {}
+
 class MockEstimateGas extends Mock implements EstimateGas {}
+
+class MockTxRepo extends Mock implements TransactionRepository {}
 
 void main() {
   const recipient = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
   const sender = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
   final estimate = FeeEstimate(
     gasLimit: BigInt.from(21000),
-    gasPrice: BigInt.from(1000000000),
+    maxFeePerGas: BigInt.from(1000000000),
+    maxPriorityFeePerGas: BigInt.from(1000000000),
   );
   final ether = BigInt.parse('1000000000000000000');
+
+  setUpAll(() => registerFallbackValue(BigInt.zero));
 
   group('RestoreWallet', () {
     test('rejects invalid mnemonic', () {
@@ -48,28 +56,40 @@ void main() {
 
     test('stores valid PIN', () async {
       final repo = FakeAuthRepository();
-      await SetupPin(repo)('123456');
+      await SetupPin(repo)('258041');
       expect(await repo.hasPin(), isTrue);
+    });
+
+    test('rejects trivial PIN on setup only', () async {
+      final repo = FakeAuthRepository()..pin = '123456';
+      await VerifyPin(repo)('123456');
+      expect(() => SetupPin(FakeAuthRepository())('123456'),
+          throwsA(isA<AuthenticationFailure>()));
     });
   });
 
   group('PrepareSend', () {
     late MockGetBalance balance;
+    late MockGetTokenBalance tokenBalance;
     late MockEstimateGas gas;
+    late MockTxRepo repo;
     late PrepareSend prepare;
-
-    setUpAll(() => registerFallbackValue(BigInt.zero));
 
     setUp(() {
       balance = MockGetBalance();
+      tokenBalance = MockGetTokenBalance();
       gas = MockEstimateGas();
-      prepare = PrepareSend(balance, gas);
+      repo = MockTxRepo();
+      prepare = PrepareSend(balance, tokenBalance, gas, repo);
       when(() => balance(sender)).thenAnswer((_) async => ether);
+      when(() => tokenBalance(any(), any())).thenAnswer((_) async => ether);
       when(() => gas(
             from: any(named: 'from'),
             to: any(named: 'to'),
             amount: any(named: 'amount'),
+            tokenContract: any(named: 'tokenContract'),
           )).thenAnswer((_) async => estimate);
+      when(() => repo.isContractAddress(any())).thenAnswer((_) async => false);
     });
 
     Future<SendRequest> run(String to, String amount) => prepare(
@@ -77,6 +97,7 @@ void main() {
           to: to,
           amountText: amount,
           decimals: 18,
+          asset: 'ETH',
         );
 
     test('returns request for valid input', () async {

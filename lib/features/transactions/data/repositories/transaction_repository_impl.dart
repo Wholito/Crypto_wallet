@@ -135,30 +135,40 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required String from,
     required String to,
     required BigInt amount,
-  }) async {
-    final result =
-        await _blockchain.estimateFee(from: from, to: to, amount: amount);
-    return FeeEstimate(gasLimit: result.gasLimit, gasPrice: result.gasPrice);
-  }
+    String? tokenContract,
+  }) =>
+      _blockchain.estimateFee(
+        from: from,
+        to: to,
+        amount: amount,
+        tokenContract: tokenContract,
+      );
 
   @override
-  Future<WalletTransaction> sendTransaction(SendRequest request) async {
-    final credentials = await _wallet.loadCredentials();
+  Future<bool> isContractAddress(String address) =>
+      _blockchain.isContract(address);
+
+  @override
+  Future<WalletTransaction> sendTransaction(
+    SendRequest request,
+    String sessionMnemonic,
+  ) async {
+    final credentials = await _wallet.loadCredentials(sessionMnemonic);
     final from = credentials.address.hexEip55;
     final hash = await _blockchain.signAndSend(
       credentials: credentials,
       to: request.to,
       amount: request.amount,
-      gasLimit: request.estimate.gasLimit,
-      gasPrice: request.estimate.gasPrice,
+      estimate: request.estimate,
+      tokenContract: request.tokenContract,
     );
     final tx = WalletTransaction(
       hash: hash,
       from: from,
       to: request.to,
       amount: request.amount,
-      asset: _network.nativeCurrency.symbol,
-      decimals: _network.nativeCurrency.decimals,
+      asset: request.asset,
+      decimals: request.decimals,
       fee: request.estimate.fee,
       status: TxStatus.pending,
       timestamp: DateTime.now(),

@@ -11,9 +11,15 @@ abstract class TransactionRepository {
     required String from,
     required String to,
     required BigInt amount,
+    String? tokenContract,
   });
 
-  Future<WalletTransaction> sendTransaction(SendRequest request);
+  Future<bool> isContractAddress(String address);
+
+  Future<WalletTransaction> sendTransaction(
+    SendRequest request,
+    String sessionMnemonic,
+  );
 
   Future<TxStatus> trackTransaction(String address, String hash);
 

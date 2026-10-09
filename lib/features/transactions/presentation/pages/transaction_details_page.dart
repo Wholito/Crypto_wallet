@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/units.dart';
+import '../../../../shared/widgets/copy_button.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../domain/entities/wallet_transaction.dart';
 import '../providers/transactions_provider.dart';
@@ -68,9 +68,6 @@ class TransactionDetailsPage extends ConsumerWidget {
   Widget _copyRow(BuildContext context, String title, String value) => ListTile(
         title: Text(title),
         subtitle: Text(value),
-        trailing: IconButton(
-          icon: const Icon(Icons.copy),
-          onPressed: () => Clipboard.setData(ClipboardData(text: value)),
-        ),
+        trailing: CopyIconButton(value: value, message: '$title copied'),
       );
 }

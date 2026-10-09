@@ -5,13 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/utils/units.dart';
 import '../../../../shared/widgets/error_view.dart';
+import '../../../assets/domain/entities/asset.dart';
 import '../../../authentication/presentation/widgets/auth_dialog.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../../transactions/domain/entities/wallet_transaction.dart';
 import '../providers/send_provider.dart';
 
 class SendPage extends ConsumerStatefulWidget {
-  const SendPage({super.key});
+  const SendPage({this.initialAsset, super.key});
+
+  final Asset? initialAsset;
 
   @override
   ConsumerState<SendPage> createState() => _SendPageState();
@@ -26,7 +29,17 @@ class _SendPageState extends ConsumerState<SendPage> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      if (mounted) ref.read(sendProvider.notifier).reset();
+      if (!mounted) return;
+      final asset = widget.initialAsset;
+      if (asset != null) {
+        ref.read(sendProvider.notifier).setInitial(
+              symbol: asset.symbol,
+              decimals: asset.decimals,
+              contractAddress: asset.contractAddress,
+            );
+      } else {
+        ref.read(sendProvider.notifier).reset();
+      }
     });
   }
 
@@ -35,6 +48,20 @@ class _SendPageState extends ConsumerState<SendPage> {
     _to.dispose();
     _amount.dispose();
     super.dispose();
+  }
+
+  Future<void> _fillMax() async {
+    if (_to.text.trim().isEmpty) {
+      showMessage(context, 'Enter recipient address first.');
+      return;
+    }
+    final value = await ref.read(sendProvider.notifier).maxAmount(_to.text);
+    if (!mounted) return;
+    if (value == null) {
+      showMessage(context, 'Unable to calculate maximum amount.');
+      return;
+    }
+    _amount.text = value;
   }
 
   Future<void> _review() async {
@@ -53,14 +80,15 @@ class _SendPageState extends ConsumerState<SendPage> {
       isScrollControlled: true,
       builder: (_) => _ConfirmSheet(
         request: state.request!,
-        symbol: network.nativeCurrency.symbol,
-        decimals: network.nativeCurrency.decimals,
+        feeSymbol: network.nativeCurrency.symbol,
+        feeDecimals: network.nativeCurrency.decimals,
       ),
     );
     if (confirmed != true || !mounted) return;
-    final authorized = await confirmAuth(context, ref, reason: 'Confirm transaction');
-    if (!authorized || !mounted) return;
-    await notifier.confirm();
+    final token =
+        await confirmAuth(context, ref, reason: 'Confirm transaction');
+    if (token == null || !mounted) return;
+    await notifier.confirm(token);
     if (!mounted) return;
     final result = ref.read(sendProvider);
     if (result.status == SendStatus.sent) {
@@ -72,19 +100,64 @@ class _SendPageState extends ConsumerState<SendPage> {
     }
   }
 
+  List<SendAssetOption> _options() {
+    final network = ref.read(currentNetworkProvider);
+    return [
+      SendAssetOption(
+        symbol: network.nativeCurrency.symbol,
+        decimals: network.nativeCurrency.decimals,
+      ),
+      for (final token in network.tokens)
+        SendAssetOption(
+          symbol: token.symbol,
+          decimals: token.decimals,
+          contractAddress: token.contractAddress,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = ref.watch(sendProvider.select((s) => s.status));
+    final selected = ref.watch(sendProvider.select((s) => s.selected));
     final network = ref.watch(currentNetworkProvider);
     final busy = status == SendStatus.preparing || status == SendStatus.sending;
+    final options = _options();
+    final symbol = selected?.symbol ?? network.nativeCurrency.symbol;
     return Scaffold(
-      appBar: AppBar(title: Text('Send ${network.nativeCurrency.symbol}')),
+      appBar: AppBar(title: Text('Send $symbol')),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (options.length > 1) ...[
+                Text('Asset', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final option in options)
+                      ChoiceChip(
+                        key: Key('asset_${option.symbol}'),
+                        label: Text(option.symbol),
+                        selected: selected?.symbol == option.symbol &&
+                            selected?.contractAddress == option.contractAddress,
+                        onSelected: busy
+                            ? null
+                            : (_) {
+                                ref
+                                    .read(sendProvider.notifier)
+                                    .selectAsset(option);
+                                _amount.clear();
+                              },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
               TextFormField(
                 key: const Key('recipient_field'),
                 controller: _to,
@@ -93,7 +166,6 @@ class _SendPageState extends ConsumerState<SendPage> {
                 decoration: const InputDecoration(
                   labelText: 'Recipient address',
                   hintText: '0x...',
-                  border: OutlineInputBorder(),
                 ),
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Enter recipient address'
@@ -103,15 +175,29 @@ class _SendPageState extends ConsumerState<SendPage> {
               TextFormField(
                 key: const Key('amount_field'),
                 controller: _amount,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Amount',
-                  suffixText: network.nativeCurrency.symbol,
-                  border: const OutlineInputBorder(),
+                  suffixText: symbol,
+                  suffixIcon: TextButton(
+                    key: const Key('max_button'),
+                    onPressed: busy ? null : _fillMax,
+                    child: const Text('Max'),
+                  ),
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Enter amount' : null,
               ),
+              if (selected?.isToken == true) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Network fee is paid in ${network.nativeCurrency.symbol}.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
               const SizedBox(height: 24),
               FilledButton(
                 key: const Key('review_button'),
@@ -135,13 +221,13 @@ class _SendPageState extends ConsumerState<SendPage> {
 class _ConfirmSheet extends StatelessWidget {
   const _ConfirmSheet({
     required this.request,
-    required this.symbol,
-    required this.decimals,
+    required this.feeSymbol,
+    required this.feeDecimals,
   });
 
   final SendRequest request;
-  final String symbol;
-  final int decimals;
+  final String feeSymbol;
+  final int feeDecimals;
 
   @override
   Widget build(BuildContext context) {
@@ -153,14 +239,36 @@ class _ConfirmSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Confirm transaction',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Confirm transaction',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
+            if (request.warning != null) ...[
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.warning_amber_rounded),
+                  title: Text(request.warning!),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _line('Asset', request.asset),
             _line('To', request.to),
-            _line('Amount', '${Units.format(request.amount, decimals)} $symbol'),
-            _line('Network fee', '${Units.format(fee, decimals)} $symbol'),
-            _line('Total',
-                '${Units.format(request.amount + fee, decimals)} $symbol'),
+            _line(
+              'Amount',
+              '${Units.format(request.amount, request.decimals)} ${request.asset}',
+            ),
+            _line(
+              'Network fee',
+              '${Units.format(fee, feeDecimals)} $feeSymbol',
+            ),
+            if (!request.isToken)
+              _line(
+                'Total',
+                '${Units.format(request.amount + fee, request.decimals)} ${request.asset}',
+              ),
             const SizedBox(height: 16),
             Row(
               children: [

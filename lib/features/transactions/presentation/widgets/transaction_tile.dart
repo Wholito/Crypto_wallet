@@ -57,10 +57,10 @@ class TransactionTile extends StatelessWidget {
         ),
         child: Icon(
           tx.isContractCall
-              ? Icons.code_rounded
+              ? Icons.terminal_rounded
               : sent
-                  ? Icons.arrow_upward_rounded
-                  : Icons.arrow_downward_rounded,
+                  ? Icons.north_east_rounded
+                  : Icons.south_west_rounded,
           color: iconColor,
         ),
       ),

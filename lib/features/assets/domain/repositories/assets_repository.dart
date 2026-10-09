@@ -6,4 +6,6 @@ abstract class AssetsRepository {
   Future<Asset> getNativeAsset(String address);
 
   Future<List<Asset>> getAssets(String address);
+
+  Future<BigInt> getTokenBalance(String address, String contract);
 }

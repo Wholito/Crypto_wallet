@@ -1,6 +1,7 @@
 import 'package:crypto_wallet/core/constants/networks.dart';
 import 'package:crypto_wallet/core/errors/failures.dart';
 import 'package:crypto_wallet/core/security/hd_wallet.dart';
+import 'package:crypto_wallet/core/security/pin_policy.dart';
 import 'package:crypto_wallet/core/storage/storage_providers.dart';
 import 'package:crypto_wallet/features/assets/domain/entities/asset.dart';
 import 'package:crypto_wallet/features/assets/domain/repositories/assets_repository.dart';
@@ -55,7 +56,17 @@ class FakeWalletRepository implements WalletRepository {
   Future<bool> hasMnemonic() async => _mnemonic != null;
 
   @override
-  Future<String> exportMnemonic() async => _mnemonic!;
+  Future<void> protectWithPin(String pin, String pinSalt) async {}
+
+  @override
+  Future<String> unlockWithPin(String pin, String pinSalt) async => _mnemonic!;
+
+  @override
+  Future<String> unlockWithDeviceKey() async => _mnemonic!;
+
+  @override
+  Future<String> exportMnemonic(String sessionMnemonic) async =>
+      sessionMnemonic.isNotEmpty ? sessionMnemonic : _mnemonic!;
 
   @override
   Future<void> deleteWallet() async {
@@ -66,18 +77,29 @@ class FakeWalletRepository implements WalletRepository {
 
 class FakeAuthRepository implements AuthRepository {
   String? pin;
+  String salt = 'dGVzdC1zYWx0LXZhbHVlLTE2';
   bool biometricEnabled = false;
 
   @override
   Future<bool> hasPin() async => pin != null;
 
   @override
-  Future<void> setPin(String value) async => pin = value;
+  Future<void> setPin(String value) async {
+    if (PinPolicy.isTrivial(value)) {
+      throw const AuthenticationFailure(
+        'PIN is too simple. Avoid sequences and repeated digits.',
+      );
+    }
+    pin = value;
+  }
 
   @override
   Future<void> verifyPin(String value) async {
     if (value != pin) throw const AuthenticationFailure('Wrong PIN.');
   }
+
+  @override
+  Future<String?> readPinSalt() async => salt;
 
   @override
   Future<bool> isBiometricAvailable() async => false;
@@ -136,6 +158,10 @@ class FakeAssetsRepository implements AssetsRepository {
 
   @override
   Future<List<Asset>> getAssets(String address) async => [_asset()];
+
+  @override
+  Future<BigInt> getTokenBalance(String address, String contract) async =>
+      balance;
 }
 
 class FakeTransactionRepository implements TransactionRepository {
@@ -157,25 +183,34 @@ class FakeTransactionRepository implements TransactionRepository {
     required String from,
     required String to,
     required BigInt amount,
+    String? tokenContract,
   }) async =>
       FeeEstimate(
         gasLimit: BigInt.from(21000),
-        gasPrice: BigInt.from(1000000000),
+        maxFeePerGas: BigInt.from(1000000000),
+        maxPriorityFeePerGas: BigInt.from(1000000000),
       );
 
   @override
-  Future<WalletTransaction> sendTransaction(SendRequest request) async {
+  Future<bool> isContractAddress(String address) async => false;
+
+  @override
+  Future<WalletTransaction> sendTransaction(
+    SendRequest request,
+    String sessionMnemonic,
+  ) async {
     final tx = WalletTransaction(
       hash: '0x${'ab' * 32}',
       from: 'from',
       to: request.to,
       amount: request.amount,
-      asset: 'SepoliaETH',
-      decimals: 18,
+      asset: request.asset,
+      decimals: request.decimals,
       fee: request.estimate.fee,
       status: TxStatus.pending,
       timestamp: DateTime(2026),
       type: TxType.sent,
+      isContractCall: request.isToken,
     );
     sent.add(tx);
     return tx;

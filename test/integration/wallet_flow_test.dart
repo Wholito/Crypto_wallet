@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fakes.dart';
 
-Future<void> _enterPin(WidgetTester tester, [String pin = '123456']) async {
+Future<void> _enterPin(WidgetTester tester, [String pin = '258041']) async {
   for (final d in pin.split('')) {
     await tester.tap(find.byKey(Key('pin_$d')));
   }
@@ -58,7 +58,7 @@ void main() {
     await _enterPin(tester);
     await _enterPin(tester);
 
-    expect(auth.pin, '123456');
+    expect(auth.pin, '258041');
     expect(find.byKey(const Key('balance_text')), findsOneWidget);
     expect(find.text('1.5 SepoliaETH'), findsWidgets);
 
@@ -98,7 +98,7 @@ void main() {
       'test test test test test test test test test test test junk',
       'sepolia',
     );
-    final auth = FakeAuthRepository()..pin = '123456';
+    final auth = FakeAuthRepository()..pin = '258041';
     await tester.pumpWidget(
       ProviderScope(
         retry: (_, _) => null,

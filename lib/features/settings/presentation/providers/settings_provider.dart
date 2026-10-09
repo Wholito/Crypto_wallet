@@ -21,8 +21,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
   }
 
   Future<void> changeTheme(AppThemeMode theme) async {
-    await ChangeTheme(ref.read(settingsRepositoryProvider))(theme);
     state = state.copyWith(theme: theme);
+    await ChangeTheme(ref.read(settingsRepositoryProvider))(theme);
   }
 
   Future<void> changeCurrency(String currency) async {

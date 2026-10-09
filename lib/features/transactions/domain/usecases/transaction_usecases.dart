@@ -1,3 +1,5 @@
+import '../../../../core/errors/failures.dart';
+import '../../../../core/security/authorization_token.dart';
 import '../entities/wallet_transaction.dart';
 import '../repositories/transaction_repository.dart';
 
@@ -31,8 +33,14 @@ class EstimateGas {
     required String from,
     required String to,
     required BigInt amount,
+    String? tokenContract,
   }) =>
-      _repository.estimateFee(from: from, to: to, amount: amount);
+      _repository.estimateFee(
+        from: from,
+        to: to,
+        amount: amount,
+        tokenContract: tokenContract,
+      );
 }
 
 class SendTransaction {
@@ -40,8 +48,17 @@ class SendTransaction {
 
   final TransactionRepository _repository;
 
-  Future<WalletTransaction> call(SendRequest request) =>
-      _repository.sendTransaction(request);
+  Future<WalletTransaction> call(
+    SendRequest request,
+    AuthorizationToken auth,
+    String sessionMnemonic,
+  ) {
+    if (!auth.isValid) {
+      throw const AuthenticationFailure('Authorization required.');
+    }
+    auth.consume();
+    return _repository.sendTransaction(request, sessionMnemonic);
+  }
 }
 
 class TrackTransaction {

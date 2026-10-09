@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
+import '../../../../shared/widgets/app_logo.dart';
 import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/fade_slide_in.dart';
 import '../../../assets/presentation/providers/assets_provider.dart';
 import '../../../market/presentation/providers/market_provider.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -19,7 +21,8 @@ class WalletPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final address = ref.watch(walletAddressProvider);
-    final settings = ref.watch(settingsProvider);
+    final network = ref.watch(settingsProvider.select((s) => s.network));
+    final currency = ref.watch(settingsProvider.select((s) => s.currency));
     final assets = ref.watch(pricedAssetsProvider);
 
     Future<void> refresh() async {
@@ -29,7 +32,17 @@ class WalletPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallet'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppLogo(size: 28),
+            const SizedBox(width: 10),
+            Text(
+              'Wallet',
+              style: Theme.of(context).appBarTheme.titleTextStyle,
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             key: const Key('settings_button'),
@@ -41,23 +54,28 @@ class WalletPage extends ConsumerWidget {
       body: address == null
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
+              color: Theme.of(context).colorScheme.primary,
               onRefresh: refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
-                  BalanceCard(
-                    network: settings.network,
-                    asset: assets.value?.firstOrNull,
-                    total: ref.watch(portfolioValueProvider),
-                    currency: settings.currency,
+                  FadeSlideIn(
+                    child: BalanceCard(
+                      network: network,
+                      asset: assets.value?.firstOrNull,
+                      total: ref.watch(portfolioValueProvider),
+                      currency: currency,
+                    ),
                   ),
                   if (assets.hasError)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         errorMessage(assets.error!),
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   if (assets.isLoading && !assets.hasValue)
@@ -66,29 +84,35 @@ class WalletPage extends ConsumerWidget {
                       child: Center(child: CircularProgressIndicator()),
                     ),
                   const SizedBox(height: 16),
-                  AddressCard(address: address),
+                  FadeSlideIn(
+                    delay: const Duration(milliseconds: 60),
+                    child: AddressCard(address: address),
+                  ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _Action(
-                        key: const Key('send_action'),
-                        icon: Icons.arrow_upward,
-                        label: 'Send',
-                        onTap: () => context.push(AppRoutes.send),
-                      ),
-                      _Action(
-                        key: const Key('receive_action'),
-                        icon: Icons.arrow_downward,
-                        label: 'Receive',
-                        onTap: () => context.push(AppRoutes.receive),
-                      ),
-                      _Action(
-                        key: const Key('history_action'),
-                        icon: Icons.history,
-                        label: 'History',
-                        onTap: () => context.push(AppRoutes.transactions),
-                      ),
-                    ],
+                  FadeSlideIn(
+                    delay: const Duration(milliseconds: 110),
+                    child: Row(
+                      children: [
+                        _Action(
+                          key: const Key('send_action'),
+                          icon: Icons.north_east_rounded,
+                          label: 'Send',
+                          onTap: () => context.push(AppRoutes.send),
+                        ),
+                        _Action(
+                          key: const Key('receive_action'),
+                          icon: Icons.south_west_rounded,
+                          label: 'Receive',
+                          onTap: () => context.push(AppRoutes.receive),
+                        ),
+                        _Action(
+                          key: const Key('history_action'),
+                          icon: Icons.receipt_long_rounded,
+                          label: 'History',
+                          onTap: () => context.push(AppRoutes.transactions),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Padding(
@@ -96,12 +120,18 @@ class WalletPage extends ConsumerWidget {
                     child: Text(
                       'Assets',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                     ),
                   ),
                   if (assets.hasValue)
-                    AssetList(assets: assets.value!, currency: settings.currency),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 160),
+                      child: AssetList(
+                        assets: assets.value!,
+                        currency: currency,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -125,9 +155,8 @@ class _Action extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Expanded(
-      child: InkWell(
+      child: PressScale(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
@@ -138,6 +167,9 @@ class _Action extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: scheme.primaryContainer,
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Icon(icon, color: scheme.onPrimaryContainer),
               ),

@@ -16,6 +16,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> verifyPin(String pin) => _local.verifyPin(pin);
 
   @override
+  Future<String?> readPinSalt() => _local.readPinSalt();
+
+  @override
   Future<bool> isBiometricAvailable() => _local.isBiometricAvailable();
 
   @override

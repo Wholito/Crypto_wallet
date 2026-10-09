@@ -1,4 +1,6 @@
 import 'package:crypto_wallet/core/constants/networks.dart';
+import 'package:crypto_wallet/core/security/authorization_token.dart';
+import 'package:crypto_wallet/features/authentication/presentation/providers/auth_provider.dart';
 import 'package:crypto_wallet/features/send/presentation/providers/send_provider.dart';
 import 'package:crypto_wallet/features/settings/presentation/providers/settings_provider.dart';
 import 'package:crypto_wallet/features/transactions/domain/entities/wallet_transaction.dart';
@@ -19,12 +21,24 @@ class _FakeTransactions extends TransactionsNotifier {
 
 void main() {
   const recipient = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+  const pin = '258041';
 
-  ProviderContainer container(FakeTransactionRepository txs, BigInt balance) {
+  Future<ProviderContainer> container(
+    FakeTransactionRepository txs,
+    BigInt balance,
+  ) async {
+    final wallet = FakeWalletRepository();
+    await wallet.createWallet(
+      'test test test test test test test test test test test junk',
+      'sepolia',
+    );
+    final auth = FakeAuthRepository()..pin = pin;
     final c = ProviderContainer(
       retry: (_, _) => null,
       overrides: [
         ...fakeOverrides(
+          wallet: wallet,
+          auth: auth,
           transactions: txs,
           assets: FakeAssetsRepository(balance),
         ),
@@ -41,13 +55,15 @@ void main() {
 
   test('prepare then confirm sends transaction', () async {
     final txs = FakeTransactionRepository();
-    final c = container(txs, BigInt.parse('1000000000000000000'));
+    final c = await container(txs, BigInt.parse('1000000000000000000'));
     final notifier = c.read(sendProvider.notifier);
 
     await notifier.prepare(recipient, '0.1');
     expect(c.read(sendProvider).status, SendStatus.ready);
 
-    await notifier.confirm();
+    final token =
+        await c.read(sessionProvider.notifier).authorizeWithPin(pin);
+    await notifier.confirm(token);
     final state = c.read(sendProvider);
     expect(state.status, SendStatus.sent);
     expect(state.transaction!.status, TxStatus.pending);
@@ -55,7 +71,7 @@ void main() {
   });
 
   test('prepare reports insufficient balance', () async {
-    final c = container(FakeTransactionRepository(), BigInt.from(1000));
+    final c = await container(FakeTransactionRepository(), BigInt.from(1000));
     await c.read(sendProvider.notifier).prepare(recipient, '1');
     final state = c.read(sendProvider);
     expect(state.status, SendStatus.error);
@@ -64,8 +80,8 @@ void main() {
 
   test('confirm without prepare does nothing', () async {
     final txs = FakeTransactionRepository();
-    final c = container(txs, BigInt.from(1000));
-    await c.read(sendProvider.notifier).confirm();
+    final c = await container(txs, BigInt.from(1000));
+    await c.read(sendProvider.notifier).confirm(AuthorizationToken.issue());
     expect(txs.sent, isEmpty);
     expect(c.read(sendProvider).status, SendStatus.idle);
   });

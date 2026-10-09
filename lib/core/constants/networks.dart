@@ -24,7 +24,7 @@ abstract final class Networks {
     id: 'polygon',
     name: 'Polygon',
     chainId: 137,
-    rpcUrl: 'https://polygon-bor-rpc.publicnode.com',
+    rpcUrl: 'https://gateway.tenderly.co/public/polygon',
     explorerUrl: 'https://polygonscan.com',
     nativeCurrency: NativeCurrency(name: 'POL', symbol: 'POL'),
   );

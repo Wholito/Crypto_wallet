@@ -51,7 +51,19 @@ class WalletRepositoryImpl implements WalletRepository {
   Future<bool> hasMnemonic() => _local.hasMnemonic();
 
   @override
-  Future<String> exportMnemonic() => _local.readMnemonic();
+  Future<void> protectWithPin(String pin, String pinSalt) =>
+      _local.encryptMnemonic(pin, pinSalt);
+
+  @override
+  Future<String> unlockWithPin(String pin, String pinSalt) =>
+      _local.unlockWithPin(pin, pinSalt);
+
+  @override
+  Future<String> unlockWithDeviceKey() => _local.unlockWithDeviceKey();
+
+  @override
+  Future<String> exportMnemonic(String sessionMnemonic) =>
+      _local.readMnemonicUnlocked(sessionMnemonic);
 
   @override
   Future<void> deleteWallet() => _local.clear();

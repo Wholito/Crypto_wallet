@@ -25,13 +25,14 @@ class OnboardingService {
   Future<void> _finish(String pin) async {
     try {
       await _ref.read(setupPinProvider)(pin);
+      await _ref.read(sessionProvider.notifier).markUnlocked(pin);
     } catch (_) {
       await _ref.read(deleteWalletProvider)();
+      await _ref.read(authRepositoryProvider).clear();
       rethrow;
     }
     await _ref.read(cacheBoxProvider).clear();
     _ref.invalidate(walletProvider);
-    _ref.read(sessionProvider.notifier).markUnlocked();
   }
 
   Future<void> resetWallet() async {

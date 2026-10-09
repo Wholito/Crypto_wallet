@@ -71,15 +71,14 @@ class AssetDetailsPage extends ConsumerWidget {
           const SizedBox(height: 24),
           Row(
             children: [
-              if (asset.contractAddress == null) ...[
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => context.push(AppRoutes.send),
-                    child: const Text('Send'),
-                  ),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () =>
+                      context.push(AppRoutes.send, extra: asset),
+                  child: const Text('Send'),
                 ),
-                const SizedBox(width: 12),
-              ],
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => context.push(AppRoutes.receive),

@@ -32,38 +32,65 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: Text('Chain ID ${network.chainId}'),
                 trailing: Icon(
                   settings.network.id == network.id
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
                   color: settings.network.id == network.id
                       ? Theme.of(context).colorScheme.primary
-                      : null,
+                      : Theme.of(context).colorScheme.outline,
                 ),
                 onTap: () =>
                     ref.read(settingsProvider.notifier).changeNetwork(network),
               ),
           ]),
           _Section('Appearance', [
-            ListTile(
-              title: const Text('Theme'),
-              trailing: DropdownButton<AppThemeMode>(
-                key: const Key('theme_dropdown'),
-                value: settings.theme,
-                underline: const SizedBox.shrink(),
-                items: [
-                  for (final mode in AppThemeMode.values)
-                    DropdownMenuItem(value: mode, child: Text(mode.name)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Theme',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<AppThemeMode>(
+                      key: const Key('theme_dropdown'),
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: AppThemeMode.system,
+                          label: Text('Auto'),
+                          icon: Icon(Icons.brightness_auto_rounded, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: AppThemeMode.light,
+                          label: Text('Light'),
+                          icon: Icon(Icons.light_mode_rounded, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: AppThemeMode.dark,
+                          label: Text('Dark'),
+                          icon: Icon(Icons.dark_mode_rounded, size: 18),
+                        ),
+                      ],
+                      selected: {settings.theme},
+                      onSelectionChanged: (value) {
+                        ref
+                            .read(settingsProvider.notifier)
+                            .changeTheme(value.first);
+                      },
+                    ),
+                  ),
                 ],
-                onChanged: (mode) {
-                  if (mode != null) {
-                    ref.read(settingsProvider.notifier).changeTheme(mode);
-                  }
-                },
               ),
             ),
           ]),
           _Section('Security', [
             SwitchListTile(
               key: const Key('biometric_switch'),
+              secondary: const Icon(Icons.fingerprint_rounded),
               title: const Text('Biometric unlock'),
               subtitle: biometricAvailable
                   ? null
@@ -84,13 +111,13 @@ class SettingsPage extends ConsumerWidget {
             ),
             ListTile(
               key: const Key('show_seed'),
-              leading: const Icon(Icons.key),
+              leading: const Icon(Icons.vpn_key_rounded),
               title: const Text('Show seed phrase'),
               onTap: () => _showSeed(context, ref),
             ),
             ListTile(
               key: const Key('lock_now'),
-              leading: const Icon(Icons.lock_outline),
+              leading: const Icon(Icons.lock_rounded),
               title: const Text('Lock wallet'),
               onTap: () {
                 ref.read(sessionProvider.notifier).lock();
@@ -100,7 +127,7 @@ class SettingsPage extends ConsumerWidget {
           _Section('Danger zone', [
             ListTile(
               key: const Key('delete_wallet'),
-              leading: Icon(Icons.delete_outline,
+              leading: Icon(Icons.delete_forever_rounded,
                   color: Theme.of(context).colorScheme.error),
               title: Text(
                 'Delete wallet from this device',
@@ -114,10 +141,14 @@ class SettingsPage extends ConsumerWidget {
     );
   }
   Future<void> _showSeed(BuildContext context, WidgetRef ref) async {
-    final ok = await confirmAuth(context, ref, reason: 'Show seed phrase');
-    if (!ok || !context.mounted) return;
+    final token =
+        await confirmAuth(context, ref, reason: 'Show seed phrase');
+    if (token == null || !context.mounted) return;
     try {
-      final mnemonic = await ref.read(exportWalletProvider)();
+      final mnemonic = await ref.read(exportWalletProvider)(
+        token,
+        ref.read(sessionProvider.notifier).unlockedMnemonic ?? '',
+      );
       if (!context.mounted) return;
       await showDialog<void>(
         context: context,
@@ -160,8 +191,8 @@ class SettingsPage extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    final ok = await confirmAuth(context, ref, reason: 'Delete wallet');
-    if (!ok || !context.mounted) return;
+    final token = await confirmAuth(context, ref, reason: 'Delete wallet');
+    if (token == null || !context.mounted) return;
     try {
       await ref.read(onboardingServiceProvider).resetWallet();
     } catch (e) {

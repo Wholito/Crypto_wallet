@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../../../core/security/authorization_token.dart';
 import '../../../../core/storage/storage_providers.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 import '../../data/datasources/auth_local_datasource.dart';
@@ -26,6 +27,10 @@ final authenticateBiometricProvider =
     Provider((ref) => AuthenticateBiometric(ref.watch(authRepositoryProvider)));
 
 class SessionNotifier extends AsyncNotifier<SessionStatus> {
+  String? _mnemonic;
+
+  String? get unlockedMnemonic => _mnemonic;
+
   @override
   Future<SessionStatus> build() async {
     final wallet = await ref.read(getWalletProvider)();
@@ -36,31 +41,69 @@ class SessionNotifier extends AsyncNotifier<SessionStatus> {
       await ref.read(deleteWalletProvider)();
       await ref.read(authRepositoryProvider).clear();
       await ref.read(cacheBoxProvider).clear();
+      _clearSecrets();
       return SessionStatus.noWallet;
     }
     return complete ? SessionStatus.locked : SessionStatus.noWallet;
   }
 
-  Future<void> unlockWithPin(String pin) async {
+  void _clearSecrets() {
+    _mnemonic = null;
+    AuthorizationToken.invalidateAll();
+  }
+
+  Future<AuthorizationToken> authorizeWithPin(String pin) async {
     await ref.read(verifyPinProvider)(pin);
+    final salt = await ref.read(authRepositoryProvider).readPinSalt();
+    if (salt == null) {
+      throw StateError('PIN salt missing');
+    }
+    _mnemonic =
+        await ref.read(walletRepositoryProvider).unlockWithPin(pin, salt);
+    return AuthorizationToken.issue();
+  }
+
+  Future<void> unlockWithPin(String pin) async {
+    await authorizeWithPin(pin);
     state = const AsyncData(SessionStatus.unlocked);
   }
 
+  Future<AuthorizationToken?> authorizeWithBiometrics(String reason) async {
+    final ok = await ref.read(authenticateBiometricProvider)(reason);
+    if (!ok) return null;
+    _mnemonic ??=
+        await ref.read(walletRepositoryProvider).unlockWithDeviceKey();
+    return AuthorizationToken.issue();
+  }
+
   Future<bool> unlockWithBiometrics() async {
-    final ok = await ref.read(authenticateBiometricProvider)('Unlock wallet');
-    if (ok) state = const AsyncData(SessionStatus.unlocked);
-    return ok;
+    final token = await authorizeWithBiometrics('Unlock wallet');
+    if (token == null) return false;
+    state = const AsyncData(SessionStatus.unlocked);
+    return true;
   }
 
   void lock() {
+    _clearSecrets();
     if (state.value == SessionStatus.unlocked) {
       state = const AsyncData(SessionStatus.locked);
     }
   }
 
-  void markUnlocked() => state = const AsyncData(SessionStatus.unlocked);
+  Future<void> markUnlocked(String pin) async {
+    final salt = await ref.read(authRepositoryProvider).readPinSalt();
+    if (salt != null) {
+      await ref.read(walletRepositoryProvider).protectWithPin(pin, salt);
+      _mnemonic =
+          await ref.read(walletRepositoryProvider).unlockWithPin(pin, salt);
+    }
+    state = const AsyncData(SessionStatus.unlocked);
+  }
 
-  void markNoWallet() => state = const AsyncData(SessionStatus.noWallet);
+  void markNoWallet() {
+    _clearSecrets();
+    state = const AsyncData(SessionStatus.noWallet);
+  }
 }
 
 final sessionProvider =

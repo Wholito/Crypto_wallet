@@ -13,7 +13,13 @@ abstract class WalletRepository {
 
   Future<bool> hasMnemonic();
 
-  Future<String> exportMnemonic();
+  Future<void> protectWithPin(String pin, String pinSalt);
+
+  Future<String> unlockWithPin(String pin, String pinSalt);
+
+  Future<String> unlockWithDeviceKey();
+
+  Future<String> exportMnemonic(String sessionMnemonic);
 
   Future<void> deleteWallet();
 }

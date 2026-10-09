@@ -18,6 +18,8 @@ final assetsRepositoryProvider = Provider<AssetsRepository>(
 
 final getBalanceProvider =
     Provider((ref) => GetBalance(ref.watch(assetsRepositoryProvider)));
+final getTokenBalanceProvider =
+    Provider((ref) => GetTokenBalance(ref.watch(assetsRepositoryProvider)));
 final getAssetsProvider =
     Provider((ref) => GetAssets(ref.watch(assetsRepositoryProvider)));
 

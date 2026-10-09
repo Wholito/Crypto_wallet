@@ -16,8 +16,11 @@ import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/transactions/presentation/pages/transaction_details_page.dart';
 import '../../features/transactions/presentation/pages/transactions_page.dart';
 import '../../features/wallet/presentation/pages/wallet_page.dart';
+import '../../shared/widgets/app_logo.dart';
 import '../../shared/widgets/error_view.dart';
 import 'app_routes.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
@@ -25,6 +28,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   final router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: AppRoutes.splash,
     refreshListenable: refresh,
     redirect: (context, state) {
@@ -70,7 +74,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               : const AssetsPage();
         },
       ),
-      GoRoute(path: AppRoutes.send, builder: (_, _) => const SendPage()),
+      GoRoute(
+        path: AppRoutes.send,
+        builder: (_, state) {
+          final extra = state.extra;
+          return SendPage(initialAsset: extra is Asset ? extra : null);
+        },
+      ),
       GoRoute(path: AppRoutes.receive, builder: (_, _) => const ReceivePage()),
       GoRoute(
         path: AppRoutes.transactions,
@@ -101,7 +111,16 @@ class _SplashPage extends ConsumerWidget {
               error: session.error!,
               onRetry: () => ref.invalidate(sessionProvider),
             )
-          : const Center(child: CircularProgressIndicator()),
+          : const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppLogo(size: 72, showGlow: true),
+                  SizedBox(height: 24),
+                  CircularProgressIndicator(),
+                ],
+              ),
+            ),
     );
   }
 }

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../shared/extensions/string_extensions.dart';
-import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/copy_button.dart';
 
 class AddressCard extends StatelessWidget {
   const AddressCard({required this.address, super.key});
@@ -17,8 +16,7 @@ class AddressCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(Icons.account_balance_wallet_outlined,
-                color: theme.colorScheme.primary),
+            Icon(Icons.qr_code_2_rounded, color: theme.colorScheme.primary),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -34,12 +32,10 @@ class AddressCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton.filledTonal(
-              icon: const Icon(Icons.copy_rounded, size: 20),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: address));
-                if (context.mounted) showMessage(context, 'Address copied');
-              },
+            CopyIconButton(
+              value: address,
+              message: 'Address copied',
+              filled: true,
             ),
           ],
         ),

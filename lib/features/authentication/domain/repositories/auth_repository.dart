@@ -5,6 +5,8 @@ abstract class AuthRepository {
 
   Future<void> verifyPin(String pin);
 
+  Future<String?> readPinSalt();
+
   Future<bool> isBiometricAvailable();
 
   Future<bool> isBiometricEnabled();
